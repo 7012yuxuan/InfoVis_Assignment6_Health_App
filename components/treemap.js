@@ -74,34 +74,31 @@ export function TreeMap(props) {
   const innerWidth = svg_width - margin.left - margin.right;
   const innerHeight = svg_height - margin.top - margin.bottom - 40;
 
-  // color
   const colorScale = useMemo(() => {
     const domain = tree?.children?.map((d) => d.name) || ["root"];
     return d3.scaleOrdinal().domain(domain).range(d3.schemeDark2);
   }, [tree]);
 
-  // legend 逻辑
   const legendItems = useMemo(() => {
     if (!tree) return [];
 
-    // 只有一个 attribute → root
     if (!tree.children || tree.children.length <= 1) {
+      const onlyChild = tree.children?.[0];
+
       return [
         {
           label: "undefined: root",
-          color: colorScale("root"),
+          color: onlyChild ? colorScale(onlyChild.name) : colorScale("root"),
         },
       ];
     }
 
-    // 两个及以上才分组
     return tree.children.map((d) => ({
       label: d.attr ? `${d.attr}: ${d.name}` : `${d.name}`,
       color: colorScale(d.name),
     }));
   }, [tree, colorScale]);
 
-  //  treemap layout
   const { leaves, totalValue, emptyMessage } = useMemo(() => {
     if (!tree) {
       return {
@@ -144,7 +141,6 @@ export function TreeMap(props) {
       onClick={() => setSelectedCell?.(null)}
     >
       <g transform={`translate(${margin.left},${margin.top})`}>
-        {/* legend */}
         {legendItems.length > 0 && (
           <g transform="translate(0, 0)">
             {legendItems.map((item, i) => (
@@ -164,7 +160,6 @@ export function TreeMap(props) {
           </g>
         )}
 
-        {/* treemap */}
         <g transform="translate(0, 40)">
           {emptyMessage ? (
             <text
@@ -193,7 +188,6 @@ export function TreeMap(props) {
 
               const bigCell = width * height > 12000;
               const narrowCell = height > width * 1.2;
-
               const bigLabel = lines[0];
 
               return (
@@ -213,7 +207,6 @@ export function TreeMap(props) {
                     </clipPath>
                   </defs>
 
-                  {/* rect */}
                   <rect
                     width={width}
                     height={height}
@@ -223,7 +216,6 @@ export function TreeMap(props) {
                     style={{ cursor: "pointer" }}
                   />
 
-                  {/* 中间 label（低饱和） */}
                   {bigCell && (
                     <text
                       x={width / 2}
@@ -244,7 +236,6 @@ export function TreeMap(props) {
                     </text>
                   )}
 
-                  {/* 左上角文字 */}
                   <g clipPath={`url(#${clipId})`}>
                     <Text lines={lines} width={width} height={height} />
                   </g>
