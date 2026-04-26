@@ -1,7 +1,45 @@
-// import React from "react";
-
 import { treemap, hierarchy, scaleOrdinal, schemeDark2, format } from "d3";
 
+// Text component: shows "attr: name" for each ancestor level, plus "Value: N"
+function Text({ node }) {
+    const x = node.x0;
+    const y = node.y0;
+    const width = node.x1 - node.x0;
+    const height = node.y1 - node.y0;
+
+    // Don't render text if the rectangle is too small
+    if (width < 30 || height < 20) return null;
+
+    // Walk up the tree to collect ancestor info (depth > 0)
+    const ancestors = [];
+    let current = node;
+    while (current.depth > 0) {
+        ancestors.unshift(current);
+        current = current.parent;
+    }
+
+    // Build lines: "attr: name" for each level, then "Value: N"
+    const lines = ancestors.map(n => `${n.data.attr}: ${n.data.name}`);
+    lines.push(`Value: ${node.value}`);
+
+    const fontSize = 11;
+    const lineHeight = 14;
+    const padding = 4;
+
+    return (
+        <text fontSize={fontSize} fill="white" style={{ pointerEvents: "none" }}>
+            {lines.map((line, i) => (
+                <tspan
+                    key={i}
+                    x={x + padding}
+                    y={y + padding + (i + 1) * lineHeight}
+                >
+                    {line}
+                </tspan>
+            ))}
+        </text>
+    );
+}
 
 export function TreeMap(props) {
     const { margin, svg_width, svg_height, tree, selectedCell, setSelectedCell } = props;
@@ -17,7 +55,6 @@ export function TreeMap(props) {
         .paddingOuter(2);
 
     // Step 3: define the color map using schemeDark2
-    // 这里假设第一层children的name作为分组
     let colorDomain = [];
     if (tree && tree.children) {
         colorDomain = tree.children.map(d => d.name);
@@ -26,14 +63,11 @@ export function TreeMap(props) {
         .domain(colorDomain)
         .range(schemeDark2);
 
-    // Step 4: plot the rectangles
+    // Step 4: build hierarchy and apply treemap layout
     let rects = [];
     if (tree) {
-        // 1. 构建hierarchy
         const root = hierarchy(tree).sum(d => d.value);
-        // 2. 应用treemap布局
         treemapLayout(root);
-        // 3. 获取所有叶子节点
         rects = root.leaves();
     }
 
@@ -44,11 +78,15 @@ export function TreeMap(props) {
             style={{ display: "block" }}
         >
             <g transform={`translate(${margin.left},${margin.top})`}>
+                {/* Step 4: Rectangles */}
                 {rects.map((d, i) => {
-                    // 找到所属第一层分组
                     let group = d;
                     while (group.depth > 1) group = group.parent;
                     const fill = colorScale(group.data.name);
+                    const isSelected =
+                        selectedCell &&
+                        selectedCell.x0 === d.x0 &&
+                        selectedCell.y0 === d.y0;
                     return (
                         <rect
                             key={i}
@@ -57,13 +95,19 @@ export function TreeMap(props) {
                             width={d.x1 - d.x0}
                             height={d.y1 - d.y0}
                             fill={fill}
-                            stroke="white"
-                            strokeWidth={2}
+                            stroke={isSelected ? "yellow" : "white"}
+                            strokeWidth={isSelected ? 3 : 2}
+                            style={{ cursor: "pointer" }}
+                            onClick={() => setSelectedCell(isSelected ? null : d)}
                         />
                     );
                 })}
+
+                {/* Step 5: Text labels */}
+                {rects.map((d, i) => (
+                    <Text key={i} node={d} />
+                ))}
             </g>
         </svg>
     );
 }
-
