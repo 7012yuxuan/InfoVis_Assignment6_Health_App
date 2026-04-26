@@ -72,10 +72,33 @@ export function TreeMap(props) {
   const clipIdPrefix = useId().replace(/:/g, "");
 
   const innerWidth = svg_width - margin.left - margin.right;
-  const innerHeight = svg_height - margin.top - margin.bottom;
+  const innerHeight = svg_height - margin.top - margin.bottom - 40;
+
+  const colorScale = useMemo(() => {
+    const domain = tree?.children?.map((d) => d.name) || ["root"];
+    return d3.scaleOrdinal().domain(domain).range(d3.schemeDark2);
+  }, [tree]);
+
+  const legendItems = useMemo(() => {
+    if (!tree) return [];
+
+    if (!tree.children || tree.children.length === 0) {
+      return [
+        {
+          label: "undefined: root",
+          color: colorScale("root"),
+        },
+      ];
+    }
+
+    return tree.children.map((d) => ({
+      label: d.attr ? `${d.attr}: ${d.name}` : `${d.name}`,
+      color: colorScale(d.name),
+    }));
+  }, [tree, colorScale]);
 
   const { leaves, totalValue, emptyMessage } = useMemo(() => {
-    if (!tree || !tree.children || tree.children.length === 0) {
+    if (!tree) {
       return {
         leaves: [],
         totalValue: 0,
@@ -88,7 +111,6 @@ export function TreeMap(props) {
       .sum((d) => (!d.children ? Number(d.value) || 0 : 0))
       .sort((a, b) => b.value - a.value);
 
-    // gap 随 attributes 增加
     const attributeDepth = Math.max(1, root.height);
     const gap = Math.min(10, 2 + attributeDepth * 2);
 
@@ -107,11 +129,6 @@ export function TreeMap(props) {
     };
   }, [tree, innerWidth, innerHeight]);
 
-  const colorScale = useMemo(() => {
-    const domain = tree?.children?.map((d) => d.name) || [];
-    return d3.scaleOrdinal().domain(domain).range(d3.schemeDark2);
-  }, [tree]);
-
   return (
     <svg
       width={svg_width}
@@ -122,92 +139,109 @@ export function TreeMap(props) {
       onClick={() => setSelectedCell?.(null)}
     >
       <g transform={`translate(${margin.left},${margin.top})`}>
-        {emptyMessage ? (
-          <text
-            x={innerWidth / 2}
-            y={innerHeight / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill="#666"
-            fontSize={14}
-          >
-            {emptyMessage}
-          </text>
-        ) : (
-          leaves.map((d, i) => {
-            const width = Math.max(0, d.x1 - d.x0);
-            const height = Math.max(0, d.y1 - d.y0);
-
-            const key = getCellKey(d);
-            const topGroup = getTopGroup(d);
-
-            const originalFill = colorScale(topGroup);
-            const fill = hoveredCell === key ? "red" : originalFill;
-
-            const clipId = `${clipIdPrefix}-clip-${i}`;
-            const lines = getLabelLines(d, totalValue);
-
-            const bigCell = width * height > 12000;
-            const narrowCell = height > width * 1.2; // 👈 自动判断竖排
-
-            const bigLabel = lines[0];
-
-            return (
-              <g
-                key={`${key}-${i}`}
-                transform={`translate(${d.x0},${d.y0})`}
-                onMouseEnter={() => setHoveredCell(key)}
-                onMouseLeave={() => setHoveredCell(null)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedCell?.(key);
-                }}
-              >
-                <defs>
-                  <clipPath id={clipId}>
-                    <rect width={width} height={height} />
-                  </clipPath>
-                </defs>
-
-                {/* 边框 */}
-                <rect
-                  width={width}
-                  height={height}
-                  fill={fill}
-                  stroke="black"
-                  strokeWidth={1}
-                  style={{ cursor: "pointer" }}
-                />
-
-                {/* 中间大字（降饱和） */}
-                {bigCell && (
-                  <text
-                    x={width / 2}
-                    y={height / 2}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="rgba(0,0,0,0.4)" // 👈 关键
-                    fontSize={Math.min(width, height) * 0.13}
-                    fontWeight={700}
-                    transform={
-                      narrowCell
-                        ? `rotate(90 ${width / 2} ${height / 2})`
-                        : undefined
-                    }
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {bigLabel}
-                  </text>
-                )}
-
-                {/* 左上角文字 */}
-                <g clipPath={`url(#${clipId})`}>
-                  <Text lines={lines} width={width} height={height} />
-                </g>
+        {legendItems.length > 0 && (
+          <g transform="translate(0, 0)">
+            {legendItems.map((item, i) => (
+              <g key={item.label} transform={`translate(${i * 200}, 0)`}>
+                <rect width={24} height={24} fill={item.color} />
+                <text
+                  x={34}
+                  y={18}
+                  fontSize={18}
+                  fill="black"
+                  style={{ fontFamily: "system-ui, sans-serif" }}
+                >
+                  {item.label}
+                </text>
               </g>
-            );
-          })
+            ))}
+          </g>
         )}
+
+        <g transform="translate(0, 40)">
+          {emptyMessage ? (
+            <text
+              x={innerWidth / 2}
+              y={innerHeight / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#666"
+              fontSize={14}
+            >
+              {emptyMessage}
+            </text>
+          ) : (
+            leaves.map((d, i) => {
+              const width = Math.max(0, d.x1 - d.x0);
+              const height = Math.max(0, d.y1 - d.y0);
+
+              const key = getCellKey(d);
+              const topGroup = getTopGroup(d);
+
+              const originalFill = colorScale(topGroup);
+              const fill = hoveredCell === key ? "red" : originalFill;
+
+              const clipId = `${clipIdPrefix}-clip-${i}`;
+              const lines = getLabelLines(d, totalValue);
+
+              const bigCell = width * height > 12000;
+              const narrowCell = height > width * 1.2;
+              const bigLabel = lines[0];
+
+              return (
+                <g
+                  key={`${key}-${i}`}
+                  transform={`translate(${d.x0},${d.y0})`}
+                  onMouseEnter={() => setHoveredCell(key)}
+                  onMouseLeave={() => setHoveredCell(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedCell?.(key);
+                  }}
+                >
+                  <defs>
+                    <clipPath id={clipId}>
+                      <rect width={width} height={height} />
+                    </clipPath>
+                  </defs>
+
+                  <rect
+                    width={width}
+                    height={height}
+                    fill={fill}
+                    stroke="black"
+                    strokeWidth={1}
+                    style={{ cursor: "pointer" }}
+                  />
+
+                  {bigCell && (
+                    <text
+                      x={width / 2}
+                      y={height / 2}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="rgba(0,0,0,0.4)"
+                      fontSize={Math.min(width, height) * 0.13}
+                      fontWeight={700}
+                      transform={
+                        narrowCell
+                          ? `rotate(90 ${width / 2} ${height / 2})`
+                          : undefined
+                      }
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {bigLabel}
+                    </text>
+                  )}
+
+                  <g clipPath={`url(#${clipId})`}>
+                    <Text lines={lines} width={width} height={height} />
+                  </g>
+                </g>
+              );
+            })
+          )}
+        </g>
       </g>
     </svg>
   );
