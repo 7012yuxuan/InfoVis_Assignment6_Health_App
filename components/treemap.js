@@ -21,10 +21,9 @@ function getLabelLines(d, totalValue) {
     .filter((n) => n.depth > 0)
     .reverse();
 
-  const lines = chain.map((n) => {
-    if (n.data.attr) return `${n.data.attr}:${n.data.name}`;
-    return `${n.data.name}`;
-  });
+  const lines = chain.map((n) =>
+    n.data.attr ? `${n.data.attr}:${n.data.name}` : `${n.data.name}`
+  );
 
   const pct = totalValue > 0 ? (d.value / totalValue) * 100 : 0;
   lines.push(`Value: ${pct.toFixed(1)}%`);
@@ -86,14 +85,10 @@ export function TreeMap(props) {
 
     const root = d3
       .hierarchy(JSON.parse(JSON.stringify(tree)))
-      .sum((d) => {
-        if (!d.children || d.children.length === 0) {
-          return Number(d.value) || 0;
-        }
-        return 0;
-      })
+      .sum((d) => (!d.children ? Number(d.value) || 0 : 0))
       .sort((a, b) => b.value - a.value);
 
+    // gap 随 attributes 增加
     const attributeDepth = Math.max(1, root.height);
     const gap = Math.min(10, 2 + attributeDepth * 2);
 
@@ -145,6 +140,7 @@ export function TreeMap(props) {
 
             const key = getCellKey(d);
             const topGroup = getTopGroup(d);
+
             const originalFill = colorScale(topGroup);
             const fill = hoveredCell === key ? "red" : originalFill;
 
@@ -152,7 +148,8 @@ export function TreeMap(props) {
             const lines = getLabelLines(d, totalValue);
 
             const bigCell = width * height > 12000;
-            const narrowCell = width < 55 && height > width * 1.5;
+            const narrowCell = height > width * 1.2; // 👈 自动判断竖排
+
             const bigLabel = lines[0];
 
             return (
@@ -172,6 +169,7 @@ export function TreeMap(props) {
                   </clipPath>
                 </defs>
 
+                {/* 边框 */}
                 <rect
                   width={width}
                   height={height}
@@ -181,13 +179,14 @@ export function TreeMap(props) {
                   style={{ cursor: "pointer" }}
                 />
 
+                {/* 中间大字（降饱和） */}
                 {bigCell && (
                   <text
                     x={width / 2}
                     y={height / 2}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fill="black"
+                    fill="rgba(0,0,0,0.4)" // 👈 关键
                     fontSize={Math.min(width, height) * 0.13}
                     fontWeight={700}
                     transform={
@@ -201,6 +200,7 @@ export function TreeMap(props) {
                   </text>
                 )}
 
+                {/* 左上角文字 */}
                 <g clipPath={`url(#${clipId})`}>
                   <Text lines={lines} width={width} height={height} />
                 </g>
