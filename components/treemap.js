@@ -15,7 +15,7 @@ function getTopGroup(d) {
   return cur.data.name;
 }
 
-function getLabelLines(d) {
+function getLabelLines(d, totalValue) {
   const chain = d
     .ancestors()
     .filter((n) => n.depth > 0)
@@ -26,7 +26,9 @@ function getLabelLines(d) {
     return `${n.data.name}`;
   });
 
-  lines.push(`Value: ${d.value.toFixed(1)}%`);
+  const pct = totalValue > 0 ? (d.value / totalValue) * 100 : 0;
+  lines.push(`Value: ${pct.toFixed(1)}%`);
+
   return lines;
 }
 
@@ -73,10 +75,11 @@ export function TreeMap(props) {
   const innerWidth = svg_width - margin.left - margin.right;
   const innerHeight = svg_height - margin.top - margin.bottom;
 
-  const { leaves, emptyMessage } = useMemo(() => {
+  const { leaves, totalValue, emptyMessage } = useMemo(() => {
     if (!tree || !tree.children || tree.children.length === 0) {
       return {
         leaves: [],
+        totalValue: 0,
         emptyMessage: "Select attributes to show the treemap.",
       };
     }
@@ -104,6 +107,7 @@ export function TreeMap(props) {
 
     return {
       leaves: root.leaves(),
+      totalValue: root.value || 0,
       emptyMessage: null,
     };
   }, [tree, innerWidth, innerHeight]);
@@ -145,8 +149,10 @@ export function TreeMap(props) {
             const fill = hoveredCell === key ? "red" : originalFill;
 
             const clipId = `${clipIdPrefix}-clip-${i}`;
-            const lines = getLabelLines(d);
+            const lines = getLabelLines(d, totalValue);
+
             const bigCell = width * height > 12000;
+            const narrowCell = width < 55 && height > width * 1.5;
             const bigLabel = lines[0];
 
             return (
@@ -184,7 +190,11 @@ export function TreeMap(props) {
                     fill="black"
                     fontSize={Math.min(width, height) * 0.13}
                     fontWeight={700}
-                    transform={`rotate(90 ${width / 2} ${height / 2})`}
+                    transform={
+                      narrowCell
+                        ? `rotate(90 ${width / 2} ${height / 2})`
+                        : undefined
+                    }
                     style={{ pointerEvents: "none" }}
                   >
                     {bigLabel}
