@@ -1,11 +1,11 @@
-import { useMemo, useId } from "react";
+import { useMemo, useId, useState } from "react";
 import * as d3 from "d3";
 
 function getCellKey(d) {
   return d
     .ancestors()
     .filter((n) => n.depth > 0)
-    .map((n) => `${n.data.attr}:${n.data.name}`)
+    .map((n) => `${n.data.attr ?? "stroke"}:${n.data.name}`)
     .join(" / ");
 }
 
@@ -21,12 +21,12 @@ function getLabelLines(d) {
     .filter((n) => n.depth > 0)
     .reverse();
 
-  const lines = chain.map((n) => `${n.data.attr}:${n.data.name}`);
+  const lines = chain.map((n) => {
+    if (n.data.attr) return `${n.data.attr}:${n.data.name}`;
+    return `${n.data.name}`;
+  });
 
-  const valueText =
-    typeof d.value === "number" ? `${d.value.toFixed(1)}%` : d.value;
-
-  lines.push(`Value: ${valueText}`);
+  lines.push(`Value: ${d.value.toFixed(1)}%`);
   return lines;
 }
 
@@ -41,10 +41,11 @@ function Text({ lines, width, height }) {
       x={5}
       y={fontSize + 5}
       fontSize={fontSize}
-      fill="white"
+      fill="black"
       style={{
         pointerEvents: "none",
         fontFamily: "system-ui, sans-serif",
+        fontWeight: 500,
       }}
     >
       {lines.map((line, i) => (
@@ -66,6 +67,7 @@ export function TreeMap(props) {
     setSelectedCell,
   } = props;
 
+  const [hoveredCell, setHoveredCell] = useState(null);
   const clipIdPrefix = useId().replace(/:/g, "");
 
   const innerWidth = svg_width - margin.left - margin.right;
@@ -89,12 +91,15 @@ export function TreeMap(props) {
       })
       .sort((a, b) => b.value - a.value);
 
+    const attributeDepth = Math.max(1, root.height);
+    const gap = Math.min(10, 2 + attributeDepth * 2);
+
     d3
       .treemap()
       .size([innerWidth, innerHeight])
       .tile(d3.treemapSquarify)
-      .paddingOuter(3)
-      .paddingInner(3)
+      .paddingOuter(gap)
+      .paddingInner(gap)
       .round(true)(root);
 
     return {
@@ -115,7 +120,7 @@ export function TreeMap(props) {
       viewBox={`0 0 ${svg_width} ${svg_height}`}
       preserveAspectRatio="xMidYMid meet"
       style={{ display: "block", width: "100%", height: "auto" }}
-      onClick={() => setSelectedCell(null)}
+      onClick={() => setSelectedCell?.(null)}
     >
       <g transform={`translate(${margin.left},${margin.top})`}>
         {emptyMessage ? (
@@ -131,30 +136,28 @@ export function TreeMap(props) {
           </text>
         ) : (
           leaves.map((d, i) => {
-            const x = d.x0;
-            const y = d.y0;
             const width = Math.max(0, d.x1 - d.x0);
             const height = Math.max(0, d.y1 - d.y0);
 
             const key = getCellKey(d);
-            const selected = selectedCell === key;
-
             const topGroup = getTopGroup(d);
-            const fill = colorScale(topGroup);
+            const originalFill = colorScale(topGroup);
+            const fill = hoveredCell === key ? "red" : originalFill;
 
             const clipId = `${clipIdPrefix}-clip-${i}`;
             const lines = getLabelLines(d);
-
             const bigCell = width * height > 12000;
             const bigLabel = lines[0];
 
             return (
               <g
                 key={`${key}-${i}`}
-                transform={`translate(${x},${y})`}
+                transform={`translate(${d.x0},${d.y0})`}
+                onMouseEnter={() => setHoveredCell(key)}
+                onMouseLeave={() => setHoveredCell(null)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedCell(selected ? null : key);
+                  setSelectedCell?.(key);
                 }}
               >
                 <defs>
@@ -167,8 +170,8 @@ export function TreeMap(props) {
                   width={width}
                   height={height}
                   fill={fill}
-                  stroke={selected ? "yellow" : "white"}
-                  strokeWidth={selected ? 3 : 2}
+                  stroke="black"
+                  strokeWidth={1}
                   style={{ cursor: "pointer" }}
                 />
 
@@ -178,7 +181,7 @@ export function TreeMap(props) {
                     y={height / 2}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fill="rgba(0,0,0,0.28)"
+                    fill="black"
                     fontSize={Math.min(width, height) * 0.13}
                     fontWeight={700}
                     transform={`rotate(90 ${width / 2} ${height / 2})`}
